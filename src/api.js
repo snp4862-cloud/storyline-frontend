@@ -1,112 +1,100 @@
-// src/api.js
-import { getAuth } from "firebase/auth";
+// api.js (개선판)
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { auth } from "./firebaseConfig.js";
 
-/** =========================
- *  공통 설정
- *  ========================= */
-export const API_BASE =
-  import.meta.env.VITE_API_BASE_URL || "https://storyline-backend-298752257905.asia-northeast3.run.app";
+const API_BASE_URL = "http://localhost:8000/"; // 끝 슬래시는 유지
+const DEFAULT_HEADERS = { "Content-Type": "application/json" };
 
-/** URL 생성 헬퍼 (쿼리 파라미터 안전하게 붙이기) */
-function buildURL(path, params) {
-  const url = new URL(`${API_BASE}${path}`);
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== "") {
-        url.searchParams.set(k, String(v));
-      }
+function waitForUser() {
+  const a = getAuth();
+  if (a.currentUser) return Promise.resolve(a.currentUser);
+  return new Promise((resolve, reject) => {
+    const unsub = onAuthStateChanged(a, (u) => {
+      unsub();
+      if (u) resolve(u);
+      else reject(new Error("로그인이 필요합니다."));
     });
-  }
-  return url.toString();
+    // (선택) 일정 시간 후 타임아웃을 주고 싶으면 여기에 타이머 추가
+  });
 }
 
-/** Firebase ID 토큰을 자동으로 붙여서 fetch */
-export async function apiFetch(path, options = {}) {
-  const user = getAuth().currentUser;
-  const token = user ? await user.getIdToken() : null;
-
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-
-  // body가 객체면 JSON으로 직렬화
-  let body = options.body;
-  if (body && typeof body === "object" && !(body instanceof FormData)) {
-    body = JSON.stringify(body);
-  }
-
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers, body });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${text}`);
-  }
-  // 일부 엔드포인트는 빈 본문일 수 있으므로 가드
-  const contentType = res.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) return null;
-  return res.json();
+async function getIdTokenSafe(forceRefresh = false) {
+  const user = await waitForUser();
+  return user.getIdToken(forceRefresh);
 }
 
-/** =========================
- *  엔드포인트 유틸
- *  ========================= */
+function buildUrl(endpoint) {
+  const path = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
+  return `${API_BASE_URL}${path}`;
+}
 
-/** 헬스체크 */
-export const health = () => apiFetch("/health");
+function normalizeOptions(options = {}) {
+  const out = { ...options };
+  out.headers = { ...DEFAULT_HEADERS, ...(options.headers || {}) };
 
-/** 루트 메타 */
-export const rootMeta = () => apiFetch("/");
+  // GET/HEAD에는 body 금지
+  const method = (options.method || "GET").toUpperCase();
+  if (options.body != null && typeof options.body === "object" && method !== "GET" && method !== "HEAD") {
+    out.body = JSON.stringify(options.body);
+  }
+  return out;
+}
 
-/** 아이템 추가 (POST /add)
- *  @param {{text:string, amount?:number, type?:string, due_date?:string}} payload
- */
-export const addItem = (payload) =>
-  apiFetch("/add", { method: "POST", body: payload });
+async function parseResponse(response) {
+  if (response.status === 204) return { status: "success" };
 
-/** 아이템 목록 (GET /items)
- *  @param {{date?:string, limit?:number, cursor?:string}} q
- */
-export const getItems = (q = {}) =>
-  apiFetch(buildURL("/items", q).replace(API_BASE, ""));
+  const ct = response.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    // 내용이 없는 200 응답 대비
+    const text = await response.text();
+    return text ? JSON.parse(text) : { status: "success" };
+  }
+  // JSON이 아니면 텍스트로
+  return await response.text();
+}
 
-/** 아이템 수정 (PUT /items/{id})
- *  @param {string} id
- *  @param {{content?:string, amount?:number, status?:'완료'|'미결', due_date?:string}} payload
- */
-export const updateItem = (id, payload) =>
-  apiFetch(`/items/${encodeURIComponent(id)}`, {
-    method: "PUT",
-    body: payload,
+export async function apiFetch(endpoint, options = {}) {
+  // 1) 우선 기존 토큰으로 시도
+  let token = await getIdTokenSafe(false);
+  let res = await fetch(buildUrl(endpoint), {
+    ...normalizeOptions(options),
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(options.headers || {}),
+      // Content-Type은 normalizeOptions에서 기본 부여
+    },
   });
 
-/** 아이템 삭제 (DELETE /items/{id}) */
-export const deleteItem = (id) =>
-  apiFetch(`/items/${encodeURIComponent(id)}`, { method: "DELETE" });
+  // 2) 토큰 문제일 수 있으니, 401이면 강제 갱신 후 1회 재시도
+  if (res.status === 401) {
+    token = await getIdTokenSafe(true);
+    res = await fetch(buildUrl(endpoint), {
+      ...normalizeOptions(options),
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(options.headers || {}),
+      },
+    });
+  }
 
-/** 검색 (GET /search)
- *  백엔드 규칙: term / date / type_ / status 중 아무 것도 없으면 [] 반환
- *  @param {{term?:string, date?:string, type_?:string, status?:string, limit?:number}} q
- */
-export const search = (q = {}) =>
-  apiFetch(buildURL("/search", q).replace(API_BASE, ""));
+  // 3) 최종 판정
+  if (!res.ok) {
+    // JSON 우선, 실패 시 텍스트
+    let message = "API 요청에 실패했습니다.";
+    try {
+      const maybeJson = await parseResponse(res);
+      if (maybeJson && typeof maybeJson === "object" && maybeJson.detail) {
+        message = maybeJson.detail;
+      } else if (typeof maybeJson === "string" && maybeJson.trim()) {
+        message = maybeJson;
+      }
+    } catch {
+      // ignore
+    }
+    const err = new Error(message);
+    err.status = res.status;
+    throw err;
+  }
 
-/** 접두어 검색 (GET /search_prefix)
- *  @param {{term:string, limit?:number}} q
- */
-export const searchPrefix = (q) =>
-  apiFetch(buildURL("/search_prefix", q).replace(API_BASE, ""));
-
-/** 월별 요약 (GET /summary)
- *  백엔드가 business/personal 소계를 함께 반환
- *  @returns {Promise<{
- *   status:'success',
- *   year:number, month:number,
- *   total_income:number, total_expense:number,
- *   pending_income:number, pending_expense:number,
- *   business:{income:number, expense:number, pending_income:number, pending_expense:number},
- *   personal:{income:number, expense:number, pending_income:number, pending_expense:number}
- * }>}
- */
-export const getSummary = ({ year, month }) =>
-  apiFetch(buildURL("/summary", { year, month }).replace(API_BASE, ""));
+  return parseResponse(res);
+}
