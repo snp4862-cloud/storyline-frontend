@@ -2,7 +2,7 @@
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebaseConfig.js";
 
-const API_BASE_URL = "http://localhost:8000/"; // 끝 슬래시는 유지
+const API_BASE_URL = "https://storyline-backend-298752257905.asia-northeast3.run.app/"; // 클라우드 주방 주소
 const DEFAULT_HEADERS = { "Content-Type": "application/json" };
 
 function waitForUser() {
