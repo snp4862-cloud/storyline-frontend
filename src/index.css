@@ -1,0 +1,74 @@
+/* (이 내용은 src/index.css 파일입니다) */
+
+/* 1. Tailwind 기본 스타일 로드 */
+@tailwind base;
+
+/* 2. (박병주님) 기본 스타일 "덮어쓰기" */
+@layer base {
+  html {
+    /* 라이트: 아주 옅은 블루 톤 */
+    @apply bg-[#f7f9fc] text-zinc-900;
+  }
+  html.dark {
+    /* 다크: 네이비 톤 */
+    @apply bg-[#0b1324] text-[#e6edf7];
+  }
+  body {
+    @apply transition-colors duration-300;
+  }
+}
+
+/* 3. Tailwind 컴포넌트 스타일 로드 */
+@tailwind components;
+
+/* 4. (박병주님) 컴포넌트 스타일 "덮어쓰기" */
+@layer components {
+  .input-base {
+    @apply border rounded px-3 py-2 text-sm focus:outline-none
+           focus:ring-2 focus:ring-blue-500/30
+           bg-white border-zinc-300 text-zinc-900
+           dark:bg-[#0f1b33] dark:border-[#1e2a44] dark:text-[#e6edf7];
+  }
+  .btn {
+    @apply rounded-lg px-4 py-2 text-sm text-white font-semibold shadow
+           bg-[#0b3b70] hover:bg-[#092f59] active:scale-[0.99]
+           dark:bg-[#1d3b73] dark:hover:bg-[#1a3566]
+           transition-colors duration-200;
+  }
+  .btn-indigo {
+     @apply rounded-lg py-3 px-6 text-white font-bold shadow
+           bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99]
+           disabled:opacity-50 disabled:cursor-wait
+           transition-colors duration-200;
+  }
+  .btn-outline {
+    @apply rounded-lg px-4 py-2 text-sm font-medium
+           border border-zinc-300 text-zinc-900 hover:bg-zinc-50
+           dark:border-[#1e2a44] dark:text-[#e6edf7] dark:hover:bg-[#0f1b33]
+           transition-colors duration-200;
+  }
+  .btn-danger-outline {
+    @apply rounded-lg py-1 px-3 text-xs font-medium
+           text-red-600 hover:text-red-800 hover:bg-red-50
+           dark:hover:bg-red-900/30
+           transition-colors duration-200;
+  }
+  .btn-edit-outline {
+    @apply rounded-lg py-1 px-3 text-xs font-medium
+           text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50
+           dark:hover:bg-indigo-900/30
+           transition-colors duration-200;
+  }
+  .card {
+    @apply rounded-xl border p-6 bg-white shadow-lg
+           border-zinc-200
+           dark:bg-[#0f1b33] dark:border-[#1e2a44];
+  }
+  .section-title { 
+    @apply text-2xl font-semibold text-gray-800 mb-4
+           dark:text-gray-100;
+  }
+}
+
+/* 5. Tailwind 유틸리티 스타일 로드 (항상 마지막) */
+@tailwind utilities;

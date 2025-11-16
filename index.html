@@ -1,12 +1,31 @@
+<!-- (이 내용은 index.html 파일입니다) -->
 <!doctype html>
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    
+    <!-- 
+      (수정!) 
+      파비콘(Favicon)을 설정합니다. 
+    -->
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- 
+      (수정!) 
+      앱의 제목을 "Storyline"으로 변경합니다.
+    -->
     <title>Storyline</title>
   </head>
+
+  <!-- (배경색은 이제 src/index.css가 관리하므로 class는 없습니다) -->
   <body>
     <div id="app"></div>
+    
+    <!-- 
+      (수정!) 
+      "type"과 "module" 사이에 "="를 추가했습니다.
+    -->
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
